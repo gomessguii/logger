@@ -23,7 +23,7 @@ func Log(logLevel int, format string, v ...any) {
 	case WARN:
 		preffix = "\033[43m[WARN]\033[0m "
 	case DEBUG:
-		preffix = "\033[40m[DEBUG]\033[0m "
+		preffix = "\033[40m\033[37m[DEBUG]\033[0m "
 	default:
 		preffix = "\033[44m[INFO]\033[0m "
 	}
