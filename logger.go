@@ -35,6 +35,11 @@ func LogError(format string, v ...any) {
 	Log(ERR, format, v...)
 }
 
+func LogFatal(format string, v ...any) {
+	Log(ERR, format, v...)
+	os.Exit(1)
+}
+
 func LogWarn(format string, v ...any) {
 	Log(WARN, format, v...)
 }
