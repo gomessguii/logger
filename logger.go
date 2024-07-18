@@ -17,15 +17,19 @@ func Log(logLevel int, format string, v ...any) {
 		return
 	}
 	var preffix string
+	logPrefix := os.Getenv("LOG_PREFIX")
+	if logPrefix != "" {
+		preffix = "\033[40m\033[37m[" + logPrefix + "]\033[0m "
+	}
 	switch logLevel {
 	case ERR:
-		preffix = "\033[41m[ERR]\033[0m "
+		preffix += "\033[41m[ERR]\033[0m "
 	case WARN:
-		preffix = "\033[43m[WARN]\033[0m "
+		preffix += "\033[43m[WARN]\033[0m "
 	case DEBUG:
-		preffix = "\033[40m\033[37m[DEBUG]\033[0m "
+		preffix += "\033[40m\033[37m[DEBUG]\033[0m "
 	default:
-		preffix = "\033[44m[INFO]\033[0m "
+		preffix += "\033[44m[INFO]\033[0m "
 	}
 	preffix += format
 	log.Printf(preffix, v...)
