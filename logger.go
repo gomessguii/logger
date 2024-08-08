@@ -26,9 +26,10 @@ type WebhookConfig struct {
 }
 
 type Logger struct {
-	ServiceName    string
-	LogContextName string
-	WebhookConfig  WebhookConfig
+	ServiceName          string
+	LogContextName       string
+	CaptureExceptionFunc func(err error)
+	WebhookConfig        WebhookConfig
 }
 
 func (l *Logger) Log(logLevel string, format string, v ...any) {
@@ -57,16 +58,22 @@ func (l *Logger) LogInfo(format string, v ...any) {
 }
 
 func (l *Logger) LogError(format string, v ...any) {
+	if l.CaptureExceptionFunc != nil {
+		l.CaptureExceptionFunc(fmt.Errorf(format, v...))
+	}
 	l.Log(ERR, format, v...)
 	if l.WebhookConfig.SendError {
-		l.sendWebhook(ERR, format, v)
+		l.sendWebhook(ERR, format, v...)
 	}
 }
 
 func (l *Logger) LogFatal(format string, v ...any) {
+	if l.CaptureExceptionFunc != nil {
+		l.CaptureExceptionFunc(fmt.Errorf(format, v...))
+	}
 	l.Log(ERR, format, v...)
 	if l.WebhookConfig.SendFatal {
-		l.sendWebhook(ERR, format, v)
+		l.sendWebhook(ERR, format, v...)
 	}
 	os.Exit(1)
 }
@@ -74,7 +81,7 @@ func (l *Logger) LogFatal(format string, v ...any) {
 func (l *Logger) LogWarn(format string, v ...any) {
 	l.Log(WARN, format, v...)
 	if l.WebhookConfig.SendWarn {
-		l.sendWebhook(WARN, format, v)
+		l.sendWebhook(WARN, format, v...)
 	}
 }
 
