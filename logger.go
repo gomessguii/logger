@@ -59,7 +59,7 @@ func (l *Logger) LogInfo(format string, v ...any) {
 
 func (l *Logger) LogError(format string, v ...any) {
 	if l.CaptureExceptionFunc != nil {
-		l.CaptureExceptionFunc(fmt.Errorf(format, v...))
+		l.CaptureExceptionFunc(fmt.Errorf(fmt.Sprintf("{%s} => %s", l.LogContextName, fmt.Sprintf(format, v...))))
 	}
 	l.Log(ERR, format, v...)
 	if l.WebhookConfig.SendError {
@@ -69,7 +69,7 @@ func (l *Logger) LogError(format string, v ...any) {
 
 func (l *Logger) LogFatal(format string, v ...any) {
 	if l.CaptureExceptionFunc != nil {
-		l.CaptureExceptionFunc(fmt.Errorf(format, v...))
+		l.CaptureExceptionFunc(fmt.Errorf(fmt.Sprintf("{%s} => %s", l.LogContextName, fmt.Sprintf(format, v...))))
 	}
 	l.Log(ERR, format, v...)
 	if l.WebhookConfig.SendFatal {
