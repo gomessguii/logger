@@ -1,3 +1,5 @@
+// Package logger provides a flexible and configurable logging solution with support for
+// different log levels, colored output, and webhook notifications.
 package logger
 
 import (
@@ -11,29 +13,59 @@ import (
 	"time"
 )
 
+// LogLevel represents the severity level of a log message
+type LogLevel string
+
 const (
-	INFO  = "INFO"
-	ERR   = "ERR"
-	WARN  = "WARN"
-	DEBUG = "DEBUG"
+	// INFO represents informational messages
+	INFO LogLevel = "INFO"
+	// ERR represents error messages
+	ERR LogLevel = "ERR"
+	// WARN represents warning messages
+	WARN LogLevel = "WARN"
+	// DEBUG represents debug messages
+	DEBUG LogLevel = "DEBUG"
 )
 
+// WebhookConfig defines the configuration for webhook notifications
 type WebhookConfig struct {
-	Url       string
-	SendError bool
-	SendFatal bool
-	SendWarn  bool
+	// URL is the endpoint where log messages will be sent
+	URL string `json:"url"`
+	// SendError determines if error logs should trigger webhook notifications
+	SendError bool `json:"sendError"`
+	// SendFatal determines if fatal logs should trigger webhook notifications
+	SendFatal bool `json:"sendFatal"`
+	// SendWarn determines if warning logs should trigger webhook notifications
+	SendWarn bool `json:"sendWarn"`
 }
 
+// Logger is the main logging structure that provides methods for different log levels
 type Logger struct {
-	ServiceName          string
-	LogContextName       string
+	// ServiceName identifies the service generating the logs
+	ServiceName string
+	// LogContextName provides additional context for the logs
+	LogContextName string
+	// DebugEnabled controls whether debug messages are logged
+	DebugEnabled bool
+	// CaptureExceptionFunc is an optional callback for error handling
 	CaptureExceptionFunc func(err error)
-	WebhookConfig        WebhookConfig
+	// WebhookConfig contains settings for webhook notifications
+	WebhookConfig WebhookConfig
 }
 
-func (l *Logger) Log(logLevel string, format string, v ...any) {
-	if logLevel == DEBUG && os.Getenv("DEBUG_ENABLED") != "1" {
+// NewLogger creates a new Logger instance with the given configuration
+func NewLogger(serviceName, logContextName string, debugEnabled bool, webhookConfig WebhookConfig) *Logger {
+	return &Logger{
+		ServiceName:    serviceName,
+		LogContextName: logContextName,
+		DebugEnabled:   debugEnabled,
+		WebhookConfig:  webhookConfig,
+	}
+}
+
+// Log sends a log message with the specified level and format
+func (l *Logger) Log(logLevel LogLevel, format string, v ...any) {
+	if logLevel == DEBUG && !l.DebugEnabled {
 		return
 	}
 
@@ -53,13 +85,16 @@ func (l *Logger) Log(logLevel string, format string, v ...any) {
 	log.Printf(prefix, v...)
 }
 
+// LogInfo sends an informational log message
 func (l *Logger) LogInfo(format string, v ...any) {
 	l.Log(INFO, format, v...)
 }
 
+// LogError sends an error log message and optionally triggers webhook and exception capture
 func (l *Logger) LogError(format string, v ...any) {
+	err := fmt.Errorf(format, v...)
 	if l.CaptureExceptionFunc != nil {
-		l.CaptureExceptionFunc(fmt.Errorf(fmt.Sprintf("{%s} => %s", l.LogContextName, fmt.Sprintf(format, v...))))
+		l.CaptureExceptionFunc(fmt.Errorf("{%s} => %w", l.LogContextName, err))
 	}
 	l.Log(ERR, format, v...)
 	if l.WebhookConfig.SendError {
@@ -67,9 +102,11 @@ func (l *Logger) LogError(format string, v ...any) {
 	}
 }
 
+// LogFatal sends a fatal error log message, triggers webhook if configured, and exits the program
 func (l *Logger) LogFatal(format string, v ...any) {
+	err := fmt.Errorf(format, v...)
 	if l.CaptureExceptionFunc != nil {
-		l.CaptureExceptionFunc(fmt.Errorf(fmt.Sprintf("{%s} => %s", l.LogContextName, fmt.Sprintf(format, v...))))
+		l.CaptureExceptionFunc(fmt.Errorf("{%s} => %w", l.LogContextName, err))
 	}
 	l.Log(ERR, format, v...)
 	if l.WebhookConfig.SendFatal {
@@ -78,6 +115,7 @@ func (l *Logger) LogFatal(format string, v ...any) {
 	os.Exit(1)
 }
 
+// LogWarn sends a warning log message and optionally triggers webhook
 func (l *Logger) LogWarn(format string, v ...any) {
 	l.Log(WARN, format, v...)
 	if l.WebhookConfig.SendWarn {
@@ -85,20 +123,26 @@ func (l *Logger) LogWarn(format string, v ...any) {
 	}
 }
 
+// LogDebug sends a debug log message if debug logging is enabled
 func (l *Logger) LogDebug(format string, v ...any) {
 	l.Log(DEBUG, format, v...)
 }
 
-func (l *Logger) sendWebhook(logLevel string, format string, v ...any) {
+// sendWebhook sends a log message to the configured webhook endpoint
+func (l *Logger) sendWebhook(logLevel LogLevel, format string, v ...any) {
+	if l.WebhookConfig.URL == "" {
+		return
+	}
+
 	message := fmt.Sprintf(format, v...)
 	timestamp := time.Now().Format(time.RFC3339)
 
 	payload := struct {
-		ServiceName    string `json:"serviceName"`
-		LogContextName string `json:"logContextName"`
-		Message        string `json:"message"`
-		Level          string `json:"level"`
-		Timestamp      string `json:"timestamp"`
+		ServiceName    string   `json:"serviceName"`
+		LogContextName string   `json:"logContextName"`
+		Message        string   `json:"message"`
+		Level          LogLevel `json:"level"`
+		Timestamp      string   `json:"timestamp"`
 	}{
 		ServiceName:    l.ServiceName,
 		LogContextName: l.LogContextName,
@@ -109,13 +153,13 @@ func (l *Logger) sendWebhook(logLevel string, format string, v ...any) {
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		l.Log(ERR, "Failed to marshal webhook payload: %v\n", err)
+		l.Log(ERR, "Failed to marshal webhook payload: %v", err)
 		return
 	}
 
-	resp, err := http.Post(l.WebhookConfig.Url, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := http.Post(l.WebhookConfig.URL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		l.Log(ERR, "Failed to send webhook: %v\n", err)
+		l.Log(ERR, "Failed to send webhook: %v", err)
 		return
 	}
 	defer func(body io.ReadCloser) {
@@ -123,6 +167,6 @@ func (l *Logger) sendWebhook(logLevel string, format string, v ...any) {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		l.Log(ERR, "Webhook responded with status: %s\n", resp.Status)
+		l.Log(ERR, "Webhook responded with status: %s", resp.Status)
 	}
 }
